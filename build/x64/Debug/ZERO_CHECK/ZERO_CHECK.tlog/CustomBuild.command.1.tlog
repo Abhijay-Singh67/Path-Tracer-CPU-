@@ -1,0 +1,10 @@
+^E:\RAY TRACING\BUILD\CMAKEFILES\9F222B0B587BF6B55CF12BB49CE6614C\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SE:/Ray Tracing" "-BE:/Ray Tracing/build" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "E:/Ray Tracing/build/MyProject.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
