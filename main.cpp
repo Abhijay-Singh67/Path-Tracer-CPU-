@@ -5,61 +5,14 @@
 #include "sphere.h"
 #include "bvh.h"
 #include "camera.h"
+#include "texture.h"
 
-int main() {
+void glass_sphere() {
     hittable_list world;
 
-    // Ground
-    auto ground_material =
-        make_shared<lambertian>(color(0.8, 0.8, 0.0));
-
-    world.add(
-        make_shared<sphere>(
-            point3(0, -100.5, -1),
-            100,
-            ground_material
-        )
-    );
-
-    // Moving sphere
-    auto moving_material =
-        make_shared<lambertian>(color(0.1, 0.2, 0.9));
-
-    point3 center1(0, 0, -1);
-    point3 center2(0, 0.5, -1);
-
-    world.add(
-        make_shared<sphere>(
-            center1,
-            center2,
-            0.5,
-            moving_material
-        )
-    );
-
-    // Metal sphere
-    auto metal_material =
-        make_shared<metal>(color(0.8, 0.8, 0.8), 0.1);
-
-    world.add(
-        make_shared<sphere>(
-            point3(1, 0, -1),
-            0.5,
-            metal_material
-        )
-    );
-
-    // Glass sphere
-    auto glass_material =
-        make_shared<dielectric>(1.5);
-
-    world.add(
-        make_shared<sphere>(
-            point3(-1, 0, -1),
-            0.5,
-            glass_material
-        )
-    );
+    auto checker = make_shared<checker_texture>(0.32, color(.2, .3, .1), color(.9, .9, .9));
+    world.add(make_shared<sphere>(point3(0,-1000,0), 1000, make_shared<lambertian>(checker)));
+    world.add(make_shared<sphere>(point3(0,1,-1), 0.5, make_shared<dielectric>(1.55)));
 
     world = hittable_list(make_shared<bvh_node>(world));
 
@@ -82,6 +35,34 @@ int main() {
     cam.focus_dist = 1.0;
 
     cam.render(world);
+}
 
+void earth() {
+    auto earth_texture = make_shared<image_texture>("external/earthmap.jpg");
+    auto earth_surface = make_shared<lambertian>(earth_texture);
+    auto globe = make_shared<sphere>(point3(0,0,0), 2, earth_surface);
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 400;
+    cam.samples_per_pixel = 100;
+    cam.max_depth         = 50;
+
+    cam.vfov     = 20;
+    cam.lookfrom = point3(0,0,12);
+    cam.lookat   = point3(0,0,0);
+    cam.vup      = vec3(0,1,0);
+
+    cam.defocus_angle = 0;
+
+    cam.render(hittable_list(globe));
+}
+
+int main(){
+    switch (2) {
+        case 1: glass_sphere(); break;
+        case 2: earth(); break;
+    }
     return 0;
 }
