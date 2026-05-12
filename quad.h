@@ -63,7 +63,7 @@ class quad : public hittable {
             return true;
         }
 
-    private:
+    protected:
         point3 Q;
         vec3 u;
         vec3 v;
@@ -72,6 +72,74 @@ class quad : public hittable {
         aabb bbox;
         vec3 normal;
         double D;
+};
+
+// Implementing a disc class on my own :)
+class disc : public quad {
+    public:
+        disc(const point3& Q, const vec3& u, const vec3& v, shared_ptr<material> mat) : quad(Q,u,v,mat) {
+            set_bounding_box();
+        }
+
+        virtual void set_bounding_box() override {
+            // Computer the bounding box
+            aabb bbox_diameter1 = aabb(Q+u, Q-u);
+            aabb bbox_diameter2 = aabb(Q+v, Q-v);
+            bbox = aabb(bbox_diameter1, bbox_diameter2);
+        }
+
+        virtual bool is_interior(double a, double b, hit_record& rec) const override {
+
+            // Fix the coordinates to lie from -1 to 1
+            double x = 2*a - 1;
+            double y = 2*b - 1;
+
+            if(x*x + y*y > 1){
+                return false;
+            }
+
+            rec.u = a;
+            rec.v = b;
+
+            return true;
+        }
+};
+
+class annular_disc : public quad {
+    public:
+        annular_disc(const point3& Q, const vec3& u, const vec3& v, double inner_radius, shared_ptr<material> mat) : quad(Q,u,v,mat), inner_radius(std::fmin(inner_radius,u.length())/u.length()) {
+            set_bounding_box();
+        }
+
+        virtual void set_bounding_box() override {
+            // Computer the bounding box
+            bbox = aabb(Q-u-v, Q+u+v);
+        }
+
+        virtual bool is_interior(double a, double b, hit_record& rec) const override {
+
+            // Fix the coordinates to lie from -1 to 1
+            double x = 2*a - 1;
+            double y = 2*b - 1;
+
+            double r2 = x*x + y*y;
+            if(r2 > 1){
+                return false;
+            }
+
+            if(r2 < inner_radius*inner_radius){
+                return false;
+            }
+
+            rec.u = a;
+            rec.v = b;
+
+            return true;
+        }
+    
+    private:
+        double inner_radius;
+        vec3 delta_u, delta_v;
 };
 
 #endif
