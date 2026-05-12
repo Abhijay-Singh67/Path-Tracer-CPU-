@@ -59,11 +59,12 @@ class metal : public material {
 
 class dielectric : public material {
   public:
-    dielectric(double refraction_index) : refraction_index(refraction_index) {}
+    dielectric(double refraction_index, color& c) : refraction_index(refraction_index), albedo(c) {}
+    dielectric(double refraction_index) : dielectric(refraction_index, color(1.0,1.0,1.0)){}
 
     bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
-        attenuation = color(1.0, 1.0, 1.0);
+        attenuation = albedo;
         double ri = rec.front_face ? (1.0/refraction_index) : refraction_index;
 
         vec3 unit_direction = unit_vector(r_in.direction());
@@ -86,6 +87,7 @@ class dielectric : public material {
     // Refractive index in vacuum or air, or the ratio of the material's refractive index over
     // the refractive index of the enclosing media
     double refraction_index;
+    color albedo;
 
     static double reflectance(double cosine, double refraction_index){
         //Use Schlick's approximation for reflectance

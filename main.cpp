@@ -238,8 +238,352 @@ void cornell_smoke() {
     cam.render(world);
 }
 
+void final_scene(){
+    hittable_list world;
+
+    auto checker = make_shared<checker_texture>(
+        0.5,
+        color(0.15, 0.15, 0.15),
+        color(0.85, 0.85, 0.85)
+    );
+
+    auto floor_mat = make_shared<lambertian>(checker);
+
+    auto marble = make_shared<noise_texture>(4);
+
+    auto white = make_shared<lambertian>(
+        color(0.8, 0.8, 0.8)
+    );
+
+    auto metal_mat = make_shared<metal>(
+        color(0.8, 0.85, 0.9),
+        0.05
+    );
+
+    auto glass = make_shared<dielectric>(1.5);
+
+    auto light = make_shared<diffuse_light>(
+        color(7, 6, 5), 1.0
+    );
+
+    // =====================================================
+    // FLOOR
+    // =====================================================
+
+    world.add(make_shared<quad>(
+        point3(-10, 0, -10),
+        vec3(20, 0, 0),
+        vec3(0, 0, 20),
+        floor_mat
+    ));
+
+    // =====================================================
+    // MARBLE SPHERE
+    // =====================================================
+
+    world.add(make_shared<sphere>(
+        point3(0, 1, 0),
+        1.0,
+        make_shared<lambertian>(marble)
+    ));
+
+    // =====================================================
+    // GLASS SPHERE
+    // =====================================================
+
+    world.add(make_shared<sphere>(
+        point3(-2.2, 1, 0),
+        1.0,
+        glass
+    ));
+
+    // =====================================================
+    // METAL SPHERE
+    // =====================================================
+
+    world.add(make_shared<sphere>(
+        point3(2.2, 1, 0),
+        1.0,
+        metal_mat
+    ));
+
+    // =====================================================
+    // GLOWING ANNULAR DISC LIGHT
+    // =====================================================
+
+    world.add(make_shared<annular_disc>(
+        point3(-1.5, 5, -1.5),
+        vec3(3, 0, 0),
+        vec3(0, 0, 3),
+        0.55,
+        light
+    ));
+
+    // =====================================================
+    // SMOKE VOLUME AROUND MARBLE SPHERE
+    // =====================================================
+
+    auto smoke_boundary = make_shared<sphere>(
+        point3(0, 1, 0),
+        1.2,
+        glass
+    );
+
+    world.add(make_shared<constant_medium>(
+        smoke_boundary,
+        0.35,
+        color(0.8, 0.85, 1.0)
+    ));
+
+    // =====================================================
+    // ROTATED BOX
+    // =====================================================
+
+    shared_ptr<hittable> tall_box =
+        box(
+            point3(0,0,0),
+            point3(1.5,3,1.5),
+            white
+        );
+
+    tall_box = make_shared<rotate_y>(tall_box, 25);
+    tall_box = make_shared<translate>(
+        tall_box,
+        vec3(4,0,-2)
+    );
+
+    world.add(tall_box);
+
+    // =====================================================
+    // SMALL EMISSIVE DISC
+    // =====================================================
+
+    world.add(make_shared<disc>(
+        point3(-4, 3, -3),
+        vec3(0.8, 0, 0),
+        vec3(0, 0.8, 0),
+        make_shared<diffuse_light>(
+            color(3, 1.5, 1.5), 1.0
+        )
+    ));
+
+    // =====================================================
+    // GLOBAL ATMOSPHERIC FOG
+    // =====================================================
+
+    auto fog_boundary = make_shared<sphere>(
+        point3(0,0,0),
+        1000,
+        glass
+    );
+
+    world.add(make_shared<constant_medium>(
+        fog_boundary,
+        0.0008,
+        color(0.7, 0.8, 1.0)
+    ));
+
+    // =====================================================
+    // BVH
+    // =====================================================
+
+    world = hittable_list(
+        make_shared<bvh_node>(world)
+    );
+
+    // =====================================================
+    // CAMERA
+    // =====================================================
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 200;
+    cam.max_depth         = 40;
+
+    cam.background = color(0.02, 0.02, 0.03);
+
+    cam.vfov     = 35;
+    cam.lookfrom = point3(8, 3, 10);
+    cam.lookat   = point3(0, 1, 0);
+    cam.vup      = vec3(0, 1, 0);
+
+    cam.defocus_angle = 0.4;
+    cam.focus_dist    = 10.0;
+
+    // =====================================================
+    // RENDER
+    // =====================================================
+
+    cam.render(world);
+}
+
+void fun_scene(){
+    hittable_list world;
+
+    // =====================================================
+    // MATERIALS
+    // =====================================================
+
+    auto checker = make_shared<checker_texture>(
+        0.5,
+        color(0.1, 0.1, 0.1),
+        color(0.9, 0.9, 0.9)
+    );
+
+    auto floor_mat = make_shared<lambertian>(checker);
+
+    auto metal_mat = make_shared<metal>(
+        color(0.92, 0.92, 0.95),
+        0.02
+    );
+
+    // =====================================================
+    // COLORED GLASS
+    // =====================================================
+    //
+    // Blue-tinted dielectric.
+    // Light passing through loses red/green energy.
+    //
+
+    auto blue_glass = make_shared<dielectric>(
+        1.5,
+        color(0.25, 0.55, 1.0)
+    );
+
+    // =====================================================
+    // LIGHT
+    // =====================================================
+
+    auto light = make_shared<diffuse_light>(
+        color(20, 20, 20), 5.0
+    );
+
+    // =====================================================
+    // FLOOR
+    // =====================================================
+
+    world.add(make_shared<quad>(
+        point3(-8, 0, -8),
+        vec3(16, 0, 0),
+        vec3(0, 0, 16),
+        floor_mat
+    ));
+
+    // =====================================================
+    // METAL SPHERE
+    // =====================================================
+
+    world.add(make_shared<sphere>(
+        point3(0, 1, 0),
+        1.0,
+        metal_mat
+    ));
+
+    // =====================================================
+    // COLORED GLASS PANEL
+    // =====================================================
+    //
+    // Positioned directly between light and sphere.
+    //
+
+    world.add(make_shared<quad>(
+        point3(-1.5, 0.0, 2.5),
+        vec3(3.0, 0, 0),
+        vec3(0, 3.0, 0),
+        blue_glass
+    ));
+
+    // =====================================================
+    // LIGHT SOURCE
+    // =====================================================
+    //
+    // Small bright emissive sphere behind glass.
+    //
+
+    world.add(make_shared<sphere>(
+        point3(0, 2.0, 5.5),
+        0.45,
+        light
+    ));
+
+    // =====================================================
+    // LIGHT BLOCKERS
+    // =====================================================
+    //
+    // These ensure light mostly reaches the sphere
+    // ONLY through the colored glass.
+    //
+
+    auto black = make_shared<lambertian>(
+        color(0.01, 0.01, 0.01)
+    );
+
+    // Left wall
+    world.add(make_shared<quad>(
+        point3(-6.0, 0, 1.5),
+        vec3(4.5, 0, 0),
+        vec3(0, 5, 0),
+        black
+    ));
+
+    // Right wall
+    world.add(make_shared<quad>(
+        point3(1.5, 0, 1.5),
+        vec3(4.5, 0, 0),
+        vec3(0, 5, 0),
+        black
+    ));
+
+    // Ceiling blocker
+    world.add(make_shared<quad>(
+        point3(-1.5, 3.1, 1.5),
+        vec3(3.0, 0, 0),
+        vec3(0, 0, 5.0),
+        black
+    ));
+
+    // =====================================================
+    // BVH
+    // =====================================================
+
+    world = hittable_list(
+        make_shared<bvh_node>(world)
+    );
+
+    // =====================================================
+    // CAMERA
+    // =====================================================
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 1280;
+
+    cam.samples_per_pixel = 500;
+    cam.max_depth         = 50;
+
+    cam.background = color(0,0,0);
+
+    cam.vfov     = 35;
+
+    cam.lookfrom = point3(8, 2.5, 0);
+    cam.lookat   = point3(0, 1.2, 0);
+
+    cam.vup = vec3(0,1,0);
+
+    cam.defocus_angle = 0.0;
+
+    // =====================================================
+    // RENDER
+    // =====================================================
+
+    cam.render(world);
+}
+
 int main(){
-    switch (7) {
+    switch (9) {
         case 1: glass_sphere(); break;
         case 2: earth(); break;
         case 3: perlin_spheres(); break;
@@ -247,6 +591,8 @@ int main(){
         case 5: simple_light(); break;
         case 6: cornell_box(); break;
         case 7: cornell_smoke(); break;
+        case 8: final_scene(); break;
+        case 9: fun_scene(); break;
     }
     return 0;
 }
