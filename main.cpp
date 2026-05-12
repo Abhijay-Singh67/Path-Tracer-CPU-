@@ -3,6 +3,7 @@
 #include "hittable_list.h"
 #include "material.h"
 #include "sphere.h"
+#include "bvh.h"
 #include "camera.h"
 
 int main() {
@@ -59,6 +60,8 @@ int main() {
             glass_material
         )
     );
+
+    world = hittable_list(make_shared<bvh_node>(world));
 
     camera cam;
 
