@@ -8,6 +8,7 @@
 #include "camera.h"
 #include "texture.h"
 #include "constant_medium.h"
+#include "heterogeneous_medium.h"
 
 void glass_sphere() {
     hittable_list world;
@@ -223,9 +224,9 @@ void cornell_smoke() {
     camera cam;
 
     cam.aspect_ratio      = 1.0;
-    cam.image_width       = 400;
-    cam.samples_per_pixel = 50;
-    cam.max_depth         = 20;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 500;
+    cam.max_depth         = 50;
     cam.background        = color(0,0,0);
 
     cam.vfov     = 40;
@@ -582,8 +583,425 @@ void fun_scene(){
     cam.render(world);
 }
 
+void dark_room(){
+
+    hittable_list world;
+
+    // =====================================================
+    // MATERIALS
+    // =====================================================
+
+    auto white = make_shared<lambertian>(color(0.73, 0.73, 0.73));
+    auto floor_mat = make_shared<lambertian>(color(0.45, 0.42, 0.38));
+    auto dark = make_shared<lambertian>(color(0.08, 0.08, 0.08));
+    auto metal_mat = make_shared<metal>(color(0.88, 0.9, 0.92), 0.03);
+
+    auto marble_tex = make_shared<noise_texture>(5);
+    auto marble = make_shared<lambertian>(marble_tex);
+
+    // Clear glass — tinting kills transmitted intensity
+    auto window_glass = make_shared<dielectric>(1.5);
+
+    // VERY bright warm sun — needs to overpower the small window aperture
+    auto sunlight = make_shared<diffuse_light>(
+        color(25, 22, 17), 1.0
+    );
+
+    // =====================================================
+    // ROOM DIMENSIONS
+    // =====================================================
+
+    double room_w = 8;
+    double room_h = 5;
+    double room_d = 8;
+
+    // =====================================================
+    // ROOM (floor, ceiling, back, left, right)
+    // =====================================================
+
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(room_w,0,0), vec3(0,0,room_d), floor_mat));
+
+    world.add(make_shared<quad>(point3(0,room_h,room_d),
+        vec3(room_w,0,0), vec3(0,0,-room_d), white));
+
+    world.add(make_shared<quad>(point3(0,0,room_d),
+        vec3(room_w,0,0), vec3(0,room_h,0), white));
+
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(0,0,room_d), vec3(0,room_h,0), white));
+
+    world.add(make_shared<quad>(point3(room_w,0,room_d),
+        vec3(0,0,-room_d), vec3(0,room_h,0), white));
+
+    // =====================================================
+    // FRONT WALL WITH WINDOW CUTOUT
+    // =====================================================
+
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(2.5,0,0), vec3(0,room_h,0), white));
+
+    world.add(make_shared<quad>(point3(5.5,0,0),
+        vec3(2.5,0,0), vec3(0,room_h,0), white));
+
+    world.add(make_shared<quad>(point3(2.5,0,0),
+        vec3(3,0,0), vec3(0,1.2,0), white));
+
+    world.add(make_shared<quad>(point3(2.5,4,0),
+        vec3(3,0,0), vec3(0,1,0), white));
+
+    // Window glass
+    world.add(make_shared<quad>(point3(2.5,1.2,0.01),
+        vec3(3,0,0), vec3(0,2.8,0), window_glass));
+
+    // =====================================================
+    // SUNLIGHT — offset to one side so rays enter at an angle
+    // =====================================================
+    //
+    // Placed off-axis (x shifted left, slightly above window center)
+    // so the god rays slant across the room instead of going
+    // straight in. Closer to the window = more intense rays.
+    //
+
+    world.add(make_shared<quad>(
+        point3(-2.0, 3.0, -3.0),   // shifted left + up
+        vec3(4, 0, 0),
+        vec3(0, 3, 0),
+        sunlight
+    ));
+
+    // =====================================================
+    // OBJECTS INSIDE ROOM
+    // =====================================================
+
+    world.add(make_shared<sphere>(point3(5.8,1.0,5.3), 1.0, metal_mat));
+    world.add(make_shared<sphere>(point3(2.2,0.7,4.0), 0.7, marble));
+
+    shared_ptr<hittable> tall_box =
+        box(point3(0,0,0), point3(1.3,3.2,1.3), dark);
+    tall_box = make_shared<rotate_y>(tall_box, 20);
+    tall_box = make_shared<translate>(tall_box, vec3(3.4,0,2.3));
+    world.add(tall_box);
+
+    // =====================================================
+    // FOG — bounded inside the room, slightly denser
+    // =====================================================
+    //
+    // Use a box-shaped boundary matching the room interior so
+    // fog doesn't leak outside (which would block sunlight before
+    // it reaches the window). Density bumped up a bit so shafts
+    // are visible but the room isn't a milk bath.
+    //
+
+    auto fog_boundary = box(
+        point3(0.05, 0.05, 0.05),
+        point3(room_w - 0.05, room_h - 0.05, room_d - 0.05),
+        make_shared<dielectric>(1.0)
+    );
+
+    world.add(make_shared<constant_medium>(
+        fog_boundary,
+        0.04,
+        color(0.95, 0.95, 0.95)
+    ));
+
+    // =====================================================
+    // BVH
+    // =====================================================
+
+    world = hittable_list(make_shared<bvh_node>(world));
+
+    // =====================================================
+    // CAMERA — INSIDE the room, looking toward window+objects
+    // =====================================================
+
+    camera cam;
+    cam.aspect_ratio = 1.0;
+    cam.image_width = 400;
+    cam.samples_per_pixel = 50;   // fog + small light → needs more samples
+    cam.max_depth = 20;
+    cam.background = color(0,0,0);
+
+    cam.vfov = 55;
+    cam.lookfrom = point3(6.5, 2.2, 6.8);   // back-right corner, inside
+    cam.lookat   = point3(3.0, 2.0, 1.0);   // toward window + box
+    cam.vup = vec3(0,1,0);
+    cam.defocus_angle = 0.0;
+
+    cam.render(world);
+}
+
+void cornell_smoke_ball() {
+
+    hittable_list world;
+
+    // =====================================================
+    // MATERIALS
+    // =====================================================
+
+    auto red    = make_shared<lambertian>(color(0.65, 0.05, 0.05));
+    auto white  = make_shared<lambertian>(color(0.73, 0.73, 0.73));
+    auto blue   = make_shared<lambertian>(color(0.15, 0.12, 0.55));  // purple-blue
+    auto light  = make_shared<diffuse_light>(color(12, 11, 10), 1.0); // slightly warm
+
+    // =====================================================
+    // CORNELL BOX (blue replaces green)
+    // =====================================================
+
+    // Right wall (blue)
+    world.add(make_shared<quad>(point3(555,0,0),
+        vec3(0,555,0), vec3(0,0,555), blue));
+
+    // Left wall (red)
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(0,555,0), vec3(0,0,555), red));
+
+    // Ceiling light — small rectangular panel, centered
+    world.add(make_shared<quad>(point3(213, 554, 227),
+        vec3(130,0,0), vec3(0,0,105), light));
+
+    // Ceiling
+    world.add(make_shared<quad>(point3(0,555,0),
+        vec3(555,0,0), vec3(0,0,555), white));
+
+    // Floor
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(555,0,0), vec3(0,0,555), white));
+
+    // Back wall
+    world.add(make_shared<quad>(point3(0,0,555),
+        vec3(555,0,0), vec3(0,555,0), white));
+
+    // =====================================================
+    // CLOUD — multiple overlapping spheres for non-uniform look
+    // =====================================================
+    //
+    // Big puffy top (denser) + smaller wispy tail below.
+    // Stack/overlap a few spheres at varying densities so the
+    // result reads as a cloud rather than a perfect ball of fog.
+    //
+
+    auto cloud_color = color(1, 1, 1);
+
+    // Main upper puff (the dense "head" of the cloud)
+    auto puff1 = make_shared<sphere>(point3(278, 340, 278), 110, white);
+    world.add(make_shared<constant_medium>(puff1, 0.045, cloud_color));
+
+    // Secondary lobe — offset slightly, gives the lumpy top edge
+    auto puff2 = make_shared<sphere>(point3(330, 360, 260), 75, white);
+    world.add(make_shared<constant_medium>(puff2, 0.05, cloud_color));
+
+    auto puff3 = make_shared<sphere>(point3(230, 355, 290), 70, white);
+    world.add(make_shared<constant_medium>(puff3, 0.05, cloud_color));
+
+    // Middle body — thinner, transitions to tail
+    auto puff4 = make_shared<sphere>(point3(278, 245, 278), 80, white);
+    world.add(make_shared<constant_medium>(puff4, 0.025, cloud_color));
+
+    // Wispy tail — very low density
+    auto puff5 = make_shared<sphere>(point3(285, 160, 278), 60, white);
+    world.add(make_shared<constant_medium>(puff5, 0.012, cloud_color));
+
+    // =====================================================
+    // AMBIENT ROOM HAZE — very thin, fills entire box
+    // =====================================================
+    //
+    // Gives the slight overall mist visible in your reference
+    // (haze near floor, soft falloff on walls).
+    //
+
+    auto room_boundary = box(
+        point3(1, 1, 1),
+        point3(554, 554, 554),
+        make_shared<dielectric>(1.0)
+    );
+
+    world.add(make_shared<constant_medium>(
+        room_boundary,
+        0.0015,         // very thin — just enough to soften
+        color(1, 1, 1)
+    ));
+
+    // =====================================================
+    // BVH
+    // =====================================================
+
+    world = hittable_list(make_shared<bvh_node>(world));
+
+    // =====================================================
+    // CAMERA
+    // =====================================================
+
+    camera cam;
+    cam.aspect_ratio      = 1.0;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 200;   // volumetrics are noisy
+    cam.max_depth         = 50;
+    cam.background        = color(0, 0, 0);
+
+    cam.vfov     = 40;
+    cam.lookfrom = point3(278, 278, -800);
+    cam.lookat   = point3(278, 278, 0);
+    cam.vup      = vec3(0, 1, 0);
+    cam.defocus_angle = 0;
+
+    cam.render(world);
+
+}
+
+void cornell_cloud() {
+    hittable_list world;
+
+    // =====================================================
+    // MATERIALS
+    // =====================================================
+
+    auto red    = make_shared<lambertian>(color(0.65, 0.05, 0.05));
+    auto white  = make_shared<lambertian>(color(0.73, 0.73, 0.73));
+    auto blue   = make_shared<lambertian>(color(0.15, 0.12, 0.55));
+    auto light  = make_shared<diffuse_light>(color(12, 11, 10), 1.0);
+
+    // =====================================================
+    // CORNELL BOX
+    // =====================================================
+
+    world.add(make_shared<quad>(point3(555,0,0),
+        vec3(0,555,0), vec3(0,0,555), blue));
+
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(0,555,0), vec3(0,0,555), red));
+
+    world.add(make_shared<quad>(point3(213, 554, 227),
+        vec3(130,0,0), vec3(0,0,105), light));
+
+    world.add(make_shared<quad>(point3(0,555,0),
+        vec3(555,0,0), vec3(0,0,555), white));
+
+    world.add(make_shared<quad>(point3(0,0,0),
+        vec3(555,0,0), vec3(0,0,555), white));
+
+    world.add(make_shared<quad>(point3(0,0,555),
+        vec3(555,0,0), vec3(0,555,0), white));
+
+    // =====================================================
+    // HETEROGENEOUS CLOUD
+    // =====================================================
+    //
+    // Shape: blob centered ~(278, 320, 278), denser at top,
+    // tapering into a wispy tail below. Built from:
+    //
+    //   (1) base shape: gaussian falloff from a moving center
+    //       — center shifts upward as we go up, creating a
+    //         bulbous "head" + thinning "neck/tail"
+    //   (2) vertical density gradient: more mass up top
+    //   (3) noise-like modulation via cheap trig: gives the
+    //       lumpy non-uniform feel without needing perlin
+    //
+    // d_max set to ~0.06 (function peaks near there).
+    //
+
+    auto cloud_density = [](const point3& p) {
+        // --- Base shape: vertically-stretched blob with a tail ---
+        // Move the "center" point upward as p.y increases,
+        // so cross-sections higher up are wider/denser.
+
+        double cx = 278.0;
+        double cz = 278.0;
+        double cy = 320.0;
+
+        // Lateral distance from vertical axis
+        double dx = p.x() - cx;
+        double dz = p.z() - cz;
+        double r2 = dx*dx + dz*dz;
+
+        // Vertical position normalized: 1 at top of cloud, 0 at bottom
+        double h = (p.y() - 130.0) / 250.0;   // ranges roughly 0..1.5
+        if (h < 0.0 || h > 1.5) return 0.0;
+
+        // Radius of the cloud at this height — fat at top, thin at bottom
+        double radius = 30.0 + 90.0 * h;       // grows with height
+        double radial_falloff = std::exp(-r2 / (radius * radius));
+
+        // Vertical envelope: peak near h ~ 1.0, fall off above and below
+        double vert = std::exp(-(h - 1.0) * (h - 1.0) / 0.25);
+
+        // --- Lumpiness: cheap pseudo-noise via stacked sines ---
+        // Gives the cloud a non-uniform, puffy surface without
+        // needing a real perlin implementation.
+        double lump =
+              0.5 + 0.5 * std::sin(p.x() * 0.035)
+                        * std::cos(p.y() * 0.04)
+                        * std::sin(p.z() * 0.03);
+        lump = 0.6 + 0.7 * lump;   // remap to ~[0.6, 1.3]
+
+        double sigma = 0.06 * radial_falloff * vert * lump;
+
+        // Safety clamp (lump can push us slightly above 0.06)
+        if (sigma > 0.06) sigma = 0.06;
+        if (sigma < 0.0)  sigma = 0.0;
+        return sigma;
+    };
+
+    // Boundary: generous AABB around where the cloud lives.
+    // Tighter = fewer wasted Woodcock steps.
+    auto cloud_boundary = box(
+        point3(140, 130, 140),
+        point3(420, 470, 420),
+        make_shared<dielectric>(1.0)   // material unused by medium
+    );
+
+    world.add(make_shared<heterogeneous_medium>(
+        cloud_boundary,
+        0.0,      // d_min
+        0.06,     // d_max  — must be ≥ peak of cloud_density
+        cloud_density,
+        color(1, 1, 1)
+    ));
+
+    // =====================================================
+    // AMBIENT ROOM HAZE (kept as constant_medium — uniform)
+    // =====================================================
+
+    auto room_boundary = box(
+        point3(1, 1, 1),
+        point3(554, 554, 554),
+        make_shared<dielectric>(1.0)
+    );
+
+    world.add(make_shared<constant_medium>(
+        room_boundary,
+        0.0015,
+        color(1, 1, 1)
+    ));
+
+    // =====================================================
+    // BVH
+    // =====================================================
+
+    world = hittable_list(make_shared<bvh_node>(world));
+
+    // =====================================================
+    // CAMERA
+    // =====================================================
+
+    camera cam;
+    cam.aspect_ratio      = 1.0;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 400;   // heterogeneous = noisier, bump it
+    cam.max_depth         = 50;
+    cam.background        = color(0, 0, 0);
+
+    cam.vfov     = 40;
+    cam.lookfrom = point3(278, 278, -800);
+    cam.lookat   = point3(278, 278, 0);
+    cam.vup      = vec3(0, 1, 0);
+    cam.defocus_angle = 0;
+
+    cam.render(world);
+}
+
 int main(){
-    switch (9) {
+    switch (12) {
         case 1: glass_sphere(); break;
         case 2: earth(); break;
         case 3: perlin_spheres(); break;
@@ -593,6 +1011,9 @@ int main(){
         case 7: cornell_smoke(); break;
         case 8: final_scene(); break;
         case 9: fun_scene(); break;
+        case 10: dark_room(); break;
+        case 11: cornell_smoke_ball(); break;
+        case 12: cornell_cloud(); break;
     }
     return 0;
 }
